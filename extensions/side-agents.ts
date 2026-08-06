@@ -1335,8 +1335,18 @@ function tmuxSendPrompt(windowId: string, prompt: string): void {
 	}
 	// -p wraps the paste in bracketed-paste escapes so the child TUI inserts
 	// newlines into its editor instead of submitting each line separately.
-	runOrThrow("tmux", ["paste-buffer", "-d", "-p", "-t", windowId]);
-	runOrThrow("tmux", ["send-keys", "-t", windowId, "C-m"]);
+	runOrThrow("tmux", [
+		"paste-buffer",
+		"-d",
+		"-p",
+		"-t",
+		windowId,
+		";",
+		"send-keys",
+		"-t",
+		windowId,
+		"Enter",
+	]);
 }
 
 function tmuxCaptureTail(windowId: string, lines = 10): string[] {
