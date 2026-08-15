@@ -1195,6 +1195,19 @@ write_exit() {
   printf '{"exitCode":%d,"finishedAt":"%s"}\n' "$code" "$(iso_now)" > "$EXIT_FILE"
 }
 
+# Safety net: the start script is sourced and may carry its own \`set -e\`,
+# which can kill this wrapper shell mid-flight (e.g. a failed npm ci) before
+# the explicit write_exit calls below run. Without a marker the parent can
+# only report a generic "crashed / window disappeared"; with it, the failure
+# surfaces as \`failed\` with the real exit code.
+on_exit() {
+  local code=$?
+  if [[ ! -s "$EXIT_FILE" ]]; then
+    write_exit "$code"
+  fi
+}
+trap on_exit EXIT
+
 cd "$WORKTREE"
 
 if [[ -x "$START_SCRIPT" ]]; then
@@ -2128,10 +2141,15 @@ function formatLabelPrefix(prefix: string, theme?: ThemeForeground): string {
 }
 
 function formatStatusTransitionMessage(transition: StatusTransitionNotice, theme?: ThemeForeground): string {
-	const win = transition.tmuxWindowIndex !== undefined ? ` (tmux #${transition.tmuxWindowIndex})` : "";
+	// Wall-clock stamp of when the transition was observed: these notices are
+	// delivered as follow-ups at the next turn boundary, which may be minutes
+	// later — without a timestamp a late burst of stale transitions reads like
+	// live flip-flopping.
+	const at = new Date().toTimeString().slice(0, 8);
+	const suffix = transition.tmuxWindowIndex !== undefined ? ` (tmux #${transition.tmuxWindowIndex}, ${at})` : ` (${at})`;
 	const from = formatStatusWord(transition.fromStatus, theme);
 	const to = formatStatusWord(transition.toStatus, theme);
-	return `side-agent ${transition.id}: ${from} -> ${to}${win}`;
+	return `side-agent ${transition.id}: ${from} -> ${to}${suffix}`;
 }
 
 function emitStatusTransitions(pi: ExtensionAPI, ctx: ExtensionContext, transitions: StatusTransitionNotice[]): void {
