@@ -1811,8 +1811,14 @@ async function startAgent(pi: ExtensionAPI, ctx: ExtensionContext, params: Start
 		await tmuxWaitForShellReady(windowId);
 		// Run cd in the interactive pane shell first so Ctrl+Z in child Pi drops
 		// back to the child worktree prompt (not the parent worktree).
-		tmuxSendLine(windowId, `cd ${shellQuote(worktree.worktreePath)}`);
-		tmuxSendLine(windowId, `bash ${shellQuote(launchScriptPath)}`);
+		// Send both commands together to avoid send-keys within tmuxSendLine
+		// racing to shell so fast that they trigger bracketed paste mode in some
+		// shell configurations (e.g. ble.sh with default accept_line_threshold=5),
+		// which would block launchScript from running until the user intervenes.
+		tmuxSendLine(
+			windowId,
+			`cd ${shellQuote(worktree.worktreePath)} && bash ${shellQuote(launchScriptPath)}`,
+		);
 
 		await mutateRegistry(stateRoot, async (registry) => {
 			const record = registry.agents[agentId];
